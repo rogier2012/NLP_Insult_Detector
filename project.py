@@ -1,9 +1,9 @@
 import csv
 import math
 
+import matplotlib.pyplot as plt
 import nltk
 import sklearn
-import textblob.classifiers
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 
@@ -35,6 +35,13 @@ with open('train.csv', 'r', encoding='unicode-escape') as csvfile:
         # print(com.encode('utf-8').decode('unicode-escape'))
         train_data.append((com, row['Insult']))
 
+def histogram():
+    histo = [x for (c,x) in train_data]
+    plt.hist(histo, bins=2, rwidth=0.8, label="Insult data set")
+    plt.xlabel('Data class')
+    plt.ylabel('Number of instances')
+    plt.savefig('histogram.png')
+
 test_data = []
 
 with open('test_with_solutions.csv', 'r', encoding='unicode-escape') as csvfile:
@@ -44,9 +51,9 @@ with open('test_with_solutions.csv', 'r', encoding='unicode-escape') as csvfile:
         test_data.append((com, row['Insult']))
 
 
-def print_confusion_matrix(results, positive_label, classifier_name, n):
+def print_confusion_matrix(results, positive_label, classifier_name, n, cutoff):
     print("-------------------------------------------------")
-    print("Confusion matrix for {} using {}-grams".format(classifier_name, n))
+    print("Confusion matrix for {} using {}-grams with {} cutoff".format(classifier_name, n, cutoff))
     print("Positive: {}".format(positive_label))
     print("                    | Actual          | -")
     print("                    | Positive        | Negative")
@@ -90,15 +97,7 @@ def extract_features(text,n = 1, extended=False,):
     return bow
 
 
-class SVMClassifier(textblob.classifiers.NLTKClassifier):
-    nltk_class = nltk.SklearnClassifier(sklearn.svm.SVC)
-
-
-class MyNaiveBayesClassifier(textblob.classifiers.NLTKClassifier):
-    nltk_class = nltk.classify.NaiveBayesClassifier
-
-
-models = [("SVM", nltk.SklearnClassifier(sklearn.svm.LinearSVC())),
+models = [("SVM", nltk.SklearnClassifier(sklearn.svm.SVC(probability=True, kernel='sigmoid'))),
           ("NaiveBayes", nltk.classify.NaiveBayesClassifier),
           # ("RandomForest", nltk.SklearnClassifier(ensemble.RandomForestClassifier())),
           # ("MaxEntropy", nltk.classify.MaxentClassifier),
@@ -107,7 +106,7 @@ models = [("SVM", nltk.SklearnClassifier(sklearn.svm.LinearSVC())),
 onlyBayes = [ ("NaiveBayes", nltk.classify.NaiveBayesClassifier)]
 
 
-def test_classifiers(classifiers, ngrams, extended_bow=False):
+def test_classifiers(classifiers, ngrams, cutoffs,  extended_bow=False):
     for ndx, (name, cl) in enumerate(classifiers):
         for gram in ngrams:
             test_results = {'tp': 0, 'fp': 0, 'tn': 0, 'fn': 0}
@@ -116,24 +115,27 @@ def test_classifiers(classifiers, ngrams, extended_bow=False):
             # print(train_features_list)
 
             model = cl.train(train_features)
-            for (comment, insult) in test_data:
-                text_features = extract_features(comment,gram, extended_bow)
-                label = model.classify(text_features)
-                if insult == '1':
-                    if label == '1':
-                        test_results['tp'] = test_results.get('tp', 0) + 1
-                    elif label == '0':
-                        test_results['fn'] = test_results.get('fn', 0) + 1
-                elif insult == '0':
-                    if label == '1':
-                        test_results['fp'] = test_results.get('fp', 0) + 1
-                    elif label == '0':
-                        test_results['tn'] = test_results.get('tn', 0) + 1
-            print_confusion_matrix(test_results, 'Insult', name, gram)
+            for cutoff in cutoffs:
+                for (comment, insult) in test_data:
+                    text_features = extract_features(comment,gram, extended_bow)
+                    dist = model.prob_classify(text_features)
+                    # label = model.classify(text_features)
+                    if insult == '1':
+                        if dist.prob('1') > cutoff:
+                            test_results['tp'] = test_results.get('tp', 0) + 1
+                        else:
+                            # print(dist.prob('1'))
+                            test_results['fn'] = test_results.get('fn', 0) + 1
+                    elif insult == '0':
+                        if dist.prob('1') > cutoff:
+                            test_results['fp'] = test_results.get('fp', 0) + 1
+                        else:
+                            test_results['tn'] = test_results.get('tn', 0) + 1
+                print_confusion_matrix(test_results, 'Insult', name, gram, cutoff)
 
 
-# test_classifiers(models, [1, 2, 3])
-test_classifiers(models, [1, 2], True)
+# test_classifiers(models, [1, 2], [0.6, 0.7,0.8, 0.9, 0.95])
+# test_classifiers(models, [1, 2], [0.3, 0.6, 0.7,0.8, 0.9, 0.95], True)
 # test_classifiers(onlyBayes, [1, 2, 3])
 # test_classifiers(onlyBayes,[1, 2, 3], True)
 # for i in range(6):
