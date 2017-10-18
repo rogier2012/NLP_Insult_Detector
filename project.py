@@ -1,21 +1,25 @@
-import nltk
 import csv
+import math
 
-from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
-from sklearn import ensemble
-from sklearn import neural_network
+import nltk
 import sklearn
 import textblob.classifiers
-import math
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
 
 stopWords = set(stopwords.words('english'))
 ps = PorterStemmer()
 tk = nltk.TweetTokenizer(strip_handles=True, reduce_len=True)
 
+filter_symbols = ['\\xc2\\xa0', '\\xe2\\x80\\xa6', '\\xe2', '\\xa3', '\\xc2', '\\n', '\\x80', '\\x99']
+
 def normalize_comment(comment):
     result = comment.replace('\"', '')
     result = result.lower()
+    for sym in filter_symbols:
+        result = result.replace(sym, '')
+    # if '\\x' in result:
+    #     print(repr(result))
     tokens = nltk.word_tokenize(result)
     wordsFiltered = []
 
@@ -48,6 +52,11 @@ def print_confusion_matrix(results, positive_label, classifier_name, n):
     print("                    | Positive        | Negative")
     print("Predicted Positive  | {:5}           | {:5}".format(results['tp'], results['fp']))
     print("-         Negative  | {:5}           | {:5}".format(results['fn'], results['tn']))
+
+    if (results['tp'] + results['fp'] + results['tn'] + results['fn']) > 0:
+        accuracy = (results['tp'] +results['tn']) * 100 / (results['tp'] + results['fp'] + results['tn'] + results['fn'])
+    else:
+        accuracy = 0
     if (results['tp'] + results['fp']) > 0:
         precision = results['tp'] * 100 / (results['tp'] + results['fp'])
     else:
@@ -63,6 +72,7 @@ def print_confusion_matrix(results, positive_label, classifier_name, n):
         matthews = float(matthews1) * 100 / math.sqrt(matthews2)
     else:
         matthews = 0
+    print("Accuracy     : {:6.2f}%".format(accuracy))
     print("Precision    : {:6.2f}%".format(precision))
     print("Recall       : {:6.2f}%".format(recall))
     print("Matthews     : {:6.2f}%".format(matthews))
@@ -123,7 +133,7 @@ def test_classifiers(classifiers, ngrams, extended_bow=False):
 
 
 # test_classifiers(models, [1, 2, 3])
-test_classifiers(models, [1, 2, 3, 4, 5, 6, 7], True)
+test_classifiers(models, [1, 2], True)
 # test_classifiers(onlyBayes, [1, 2, 3])
 # test_classifiers(onlyBayes,[1, 2, 3], True)
 # for i in range(6):
